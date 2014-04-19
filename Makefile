@@ -10,3 +10,6 @@ capture: $(obj)
 $(obj): $(src)
 	$(CC) $(LD_FLAGS) -c -o $@ $<
 
+clean:
+	rm -f *.o
+	rm capture

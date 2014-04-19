@@ -11,6 +11,8 @@
 #include <linux/if.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "protocol.h"
+#include "baseTypes.h"
 
 #ifdef ANDROID
 #include <android/log.h>
@@ -104,6 +106,12 @@ static int hookBuf(char *p, int len) {
     return 0;
 }
 
+static void unHookBuf() {
+	free(spBuf);
+	soff = 0;
+	slen = 0;
+}
+
 static void off(int u) {
     soff += u;
 }
@@ -111,13 +119,9 @@ static void setOff(int o) {
     soff = o;
 }
 
-typedef U8 unsigned char;
-typedef U16 unsigned short;
-typedef U32 unsigned int;
-typedef U64 unsigned long long;
 
 #define getType(type) \
-    static type get#type() { \
+    static type get##type() { \
         type ret = *((type *)spBuf); \
         soff += sizeof(type); \
         return ret; \
@@ -128,6 +132,31 @@ getType(U16)
 getType(U32)
 getType(U64)
 
+static void dump() {
+        char *pc = (char *)spBuf;
+        int i = 0;
+        while (pc < spBuf + slen) {
+            if (i % 32 == 0) LOG("%08X: ", (unsigned int)(((char *)pc) - spBuf));
+			LOG("%02X ", *pc & 0xff);
+            pc++;
+            i++;
+			if (i%32 == 0) LOG("\r\n");
+        }
+		LOG("\r\n");
+}
+
+void parseLinkLayer() {
+	U8 src[6], dest[6];
+	ethHeader eth;
+	int i;
+	for (i=0; i<6; i++) {
+		src[i] = getU8();	
+	}
+	for (i=0; i<6; i++) {
+		dest[i] = getU8();	
+	}
+}
+
 void parseCap() {
     parseLinkLayer();
 }
@@ -137,21 +166,23 @@ int main(int argc, char *argv[]) {
     int sockFd;
     int ret = 0;
     char *pBuf;
+	const char *dev = "wlan0";
     sockFd = openSocket();
     if (sockFd < 0) {
         ret = -1;
         goto bad;
     }
+	LOG("INSERT\r\n");
     
     int n;
-    if ( (n = bind2dev(sockFd, "eth0")) != 0) {
+    if ( (n = bind2dev(sockFd, dev)) != 0) {
         ret = n;
         goto bad;
     }
 
     pBuf = (char *)malloc(1<<20);
     int cnt = 0;
-    while (cnt < 100) {
+    while (cnt < 10) {
         int len = readCap(sockFd, pBuf, 1<<20);
 
         LOG("read len %d\r\n", len);
@@ -160,23 +191,15 @@ int main(int argc, char *argv[]) {
             LOGE("hookBuf failed.\r\n");
             goto bad;
         }
-
-        int *pI = (int *)pBuf;
-        int i = 0;
-        while ((char *)pI < pBuf + len) {
-            if (i % 8 == 0) LOG("\r\n%08X: ", ((char *)pI) - pBuf);
-            dumpInt(*pI);
-            pI++;
-            i++;
-        }
+		dump();
         parseCap();
         LOG("\r\n");
-        cnt++;
         unHookBuf();
+        cnt++;
     }
 
 bad:
-    if (sockFd >= 0) close(sockFd);
-    if (pBuf != NULL) free(pBuf);
+//    if (sockFd >= 0) close(sockFd);
+//    if (pBuf != NULL) free(pBuf);
     return ret;
 }
