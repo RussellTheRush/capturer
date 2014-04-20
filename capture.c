@@ -13,19 +13,9 @@
 #include <assert.h>
 #include "protocol.h"
 #include "baseTypes.h"
+#include "log.h"
+#include <arpa/inet.h>
 
-#ifdef ANDROID
-#include <android/log.h>
-#define TAG "capture"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
-#define LOG(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-
-#else
-#define LOG(...) fprintf(stdout, __VA_ARGS__)
-#define LOGE(...) fprintf(stderr, __VA_ARGS__)
-#endif
 
 #ifndef MSG_TRUNC
 #define MSG_TRUNC   0x20
@@ -112,6 +102,22 @@ static void unHookBuf() {
 	slen = 0;
 }
 
+static int copy(U8 *destBuf, int reqLen) {
+	int cpyLen = 0;
+	if (reqLen <= 0) {
+		return 0;
+	}
+	if (reqLen > slen - soff) {
+		cpyLen = slen - soff;
+	} else {
+		cpyLen = reqLen;
+	}
+
+	memcpy(destBuf, spBuf, cpyLen);
+	soff += cpyLen;
+	return cpyLen;
+}
+
 static void off(int u) {
     soff += u;
 }
@@ -149,12 +155,9 @@ void parseLinkLayer() {
 	U8 src[6], dest[6];
 	ethHeader eth;
 	int i;
-	for (i=0; i<6; i++) {
-		src[i] = getU8();	
-	}
-	for (i=0; i<6; i++) {
-		dest[i] = getU8();	
-	}
+	copy((U8 *)&eth, sizeof(eth));
+	eth.protocol = ntohs(eth.protocol);
+	dumpEthHeader(eth);
 }
 
 void parseCap() {
@@ -191,7 +194,7 @@ int main(int argc, char *argv[]) {
             LOGE("hookBuf failed.\r\n");
             goto bad;
         }
-		dump();
+		//dump();
         parseCap();
         LOG("\r\n");
         unHookBuf();
