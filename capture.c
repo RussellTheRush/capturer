@@ -113,12 +113,12 @@ static int copy(U8 *destBuf, int reqLen) {
 		cpyLen = reqLen;
 	}
 
-	memcpy(destBuf, spBuf, cpyLen);
+	memcpy(destBuf, spBuf + soff, cpyLen);
 	soff += cpyLen;
 	return cpyLen;
 }
 
-static void off(int u) {
+static void seek(int u) {
     soff += u;
 }
 static void setOff(int o) {
@@ -151,17 +151,33 @@ static void dump() {
 		LOG("\r\n");
 }
 
-void parseLinkLayer() {
-	U8 src[6], dest[6];
+ethHeader parseLinkLayer() {
 	ethHeader eth;
-	int i;
 	copy((U8 *)&eth, sizeof(eth));
-	eth.protocol = ntohs(eth.protocol);
-	dumpEthHeader(eth);
+	eth.type = ntohs(eth.type);
+	//dumpEthHeader(eth);
+	return eth;
+}
+
+void parseNetLayer() {
+	int off;
+	ipHeader ip;
+	copy((U8 *)&ip, sizeof(ip));
+	if (ip.headerLen > 5) {
+		off = (ip.headerLen - 5) * 32;
+		assert(off > 0);
+		seek(off);
+	}
+	dumpIpHeader(ip);
 }
 
 void parseCap() {
-    parseLinkLayer();
+    ethHeader eth = parseLinkLayer();
+	if (eth.type != ETH_TYPE_IP) {
+		return ;
+	}
+	parseNetLayer();
+
 }
 
 int main(int argc, char *argv[]) {
@@ -175,7 +191,6 @@ int main(int argc, char *argv[]) {
         ret = -1;
         goto bad;
     }
-	LOG("INSERT\r\n");
     
     int n;
     if ( (n = bind2dev(sockFd, dev)) != 0) {
@@ -185,6 +200,7 @@ int main(int argc, char *argv[]) {
 
     pBuf = (char *)malloc(1<<20);
     int cnt = 0;
+	//LOG("eth header size:%d\r\n", sizeof(ethHeader));
     while (cnt < 10) {
         int len = readCap(sockFd, pBuf, 1<<20);
 
