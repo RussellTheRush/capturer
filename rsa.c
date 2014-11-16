@@ -19,6 +19,15 @@ u32 bignumber_mul(u8 *a, u32 b, u32 la, u8 *out);
 //sum add ta after shit n, result in sum, ruturn size
 u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n);
 
+u32 bignumber_getBitSize(u8 *a, u32 la);
+
+u32 bignumber_bitShiftCmp(u8 *a, u8 *b, u32 bitShift);
+u32 bignumber_bitShift(u8 *a, u8 *out, u32 bitShift);
+
+u32 bignumber_bitShiftAdd(u8 *a, u8 *b, u32 abits, u32 bbits, u32 bitShift);
+
+u32 bignumber_bitShiftGet2Bytes(u8 *a, u32 abits, u32 bitShift);
+
 void dump_bytes(u8 *a, u32 l);
 
 #ifdef TEST
@@ -112,6 +121,53 @@ u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n) {
 		else ret_size = i + n + 1;
 	}
 	return ret_size;
+}
+
+u32 bignumber_getBitSize(u8 *a, u32 la) {
+	u32 res = (la - 1) * 8;
+	u8 byte = *(a + la - 1);
+	u32 i;
+	for (i=7; i>=0; i--) {
+		if ((byte & (1<<i))) {
+			res += i + 1;
+			break;
+		}
+	}
+	return res;
+}
+
+u32 bignumber_bitCmp(u8 *a, u8 *b, u32 abits, u32 bbits) {
+	u32 abytes = abits / 8;
+	u32 aremainder = abits % 8;
+	u32 bbytes = bbits / 8;
+	u32 bremainder = bbits % 8;
+	u32 ta, tb;
+	u32 i;
+	if (bbits <= 8) {
+		ta = (*(u32 *)(a+abytes)) & ((1<<(aremainder+9))-1);
+	}
+	ta = (*(u32 *)(a+abytes)) & ((1<<(aremainder+9))-1);
+	tb = (*(u32 *)(b+bbytes)) & ((1<<(bremainder+9))-1);
+	if (ta > tb) {
+		return 1;
+	} else if (ta < tb) {
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
+u32 bignumber_bitShift(u8 *a, u8 *out, u32 abits, u32 bitShift) {
+
+	return abits + bitShift;
+}
+
+u32 bignumber_bitShiftAdd(u8 *a, u8 *b, u32 abits, u32 bbits, u32 bitShift) {
+
+}
+
+u32 bignumber_bitShiftGet2Bytes(u8 *a, u32 abits, u32 bitShift) {
+
 }
 
 void dump_bytes(u8 *a, u32 l) {
