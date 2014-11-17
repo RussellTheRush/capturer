@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #define TEST 1
 
@@ -21,19 +22,19 @@ u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n);
 
 u32 bignumber_getBitSize(u8 *a, u32 la);
 
-u32 bignumber_bitShiftCmp(u8 *a, u8 *b, u32 bitShift);
-u32 bignumber_bitShift(u8 *a, u8 *out, u32 bitShift);
+u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift);
 
-u32 bignumber_bitShiftAdd(u8 *a, u8 *b, u32 abits, u32 bbits, u32 bitShift);
 
-u32 bignumber_bitShiftGet2Bytes(u8 *a, u32 abits, u32 bitShift);
+inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits);
+
+inline void bignumber_bitShiftSetBits(u8 *a, u32 abits, u32 bitShift, u32 bits, u32 n);
 
 void dump_bytes(u8 *a, u32 l);
 
 #ifdef TEST
 u8 bignum[] = {0xab, 0xcc, 0xfb, 0x19, 0xaa, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
 u8 bignum_e[] = {0x3c, 0x69, 0xfb, 0x75, 0x9b, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
-u8 bignum_N[] = {0xab, 0xea, 0xfb, 0x19, 0xd9, 0x33, 0xf9, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
+u8 bignum_N[] = {0xab, 0xea, 0xfb, 0x19, 0xd9, 0x33, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
 #endif
 
 int main(int argc, char *argv[]) {
@@ -41,7 +42,28 @@ int main(int argc, char *argv[]) {
 	//u32 size = bignumber_mul(bignum, 0xfa3c, 6);
 	//dump_bytes(bignum, size);
 	u32 sum_size = bignumber_modMul(bignum, bignum_e, bignum_N, ARRAY_SIZE(bignum), ARRAY_SIZE(bignum_e), ARRAY_SIZE(bignum_N));
-	//dump_bytes(bignum, );
+    printf("test get bit size:\n");
+    u32 bit_size = bignumber_getBitSize(bignum_N, 7);
+    printf("bit size: %d\n", bit_size);
+    printf("test bignumber_bitShiftGetBits:\n");
+    u32 n = bignumber_bitShiftGetBits(bignum_N, bit_size, 17, 15);
+    printf("n: %x\n", n);
+
+    printf("test bignumber_bitShiftSetBits:\n");
+	dump_bytes(bignum_N, ARRAY_SIZE(bignum_N));
+    bignumber_bitShiftSetBits(bignum_N, bit_size, 17, 16, 0x56c7);
+	dump_bytes(bignum_N, ARRAY_SIZE(bignum_N));
+    printf("test bignumber_BitShiftCmp:\n");
+    u8 a[] = {0xaa, 0xba, 0xcd, 0x17};
+    u8 b[] = {0xba, 0xcd, 0x17};
+	dump_bytes(a, ARRAY_SIZE(a));
+	dump_bytes(b, ARRAY_SIZE(b));
+    u32 sa = bignumber_getBitSize(a, ARRAY_SIZE(a));
+    printf("sa: %d\n", sa);
+    u32 sb = bignumber_getBitSize(b, ARRAY_SIZE(b));
+    printf("sb: %d\n", sb);
+    u32 cmp_res = bignumber_BitShiftCmp(a, b, sa, sb, sa - sb);
+    printf("cmp_res %d\n", cmp_res);
 #endif
 	return 0;
 }
@@ -136,38 +158,64 @@ u32 bignumber_getBitSize(u8 *a, u32 la) {
 	return res;
 }
 
-u32 bignumber_bitCmp(u8 *a, u8 *b, u32 abits, u32 bbits) {
-	u32 abytes = abits / 8;
-	u32 aremainder = abits % 8;
-	u32 bbytes = bbits / 8;
-	u32 bremainder = bbits % 8;
-	u32 ta, tb;
-	u32 i;
-	if (bbits <= 8) {
-		ta = (*(u32 *)(a+abytes)) & ((1<<(aremainder+9))-1);
-	}
-	ta = (*(u32 *)(a+abytes)) & ((1<<(aremainder+9))-1);
-	tb = (*(u32 *)(b+bbytes)) & ((1<<(bremainder+9))-1);
-	if (ta > tb) {
-		return 1;
-	} else if (ta < tb) {
-		return -1;
-	} else {
-		return 0;
-	}
+u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
+    u32 t, f;
+    u32 units = bbits / 16;
+    u32 rem = bbits % 16;
+    u32 i, ai, bi;
+
+    //printf("rem: %d\n", rem);
+   
+    ai = bbits + shift;
+    bi = bbits;
+    for (i=0; i<units; i++) {
+        ai -= 16;
+        bi -= 16;
+        t = bignumber_bitShiftGetBits(a, abits, ai, 16);
+        f = bignumber_bitShiftGetBits(b, bbits, bi, 16);
+        //printf("t: %x\n", t);
+        //printf("f: %x\n", f);
+        if (t > f) {
+            return 1;
+        } else if (t < f) {
+            return -1;
+        } 
+    }
+
+    if (rem) {
+        t = bignumber_bitShiftGetBits(a, abits, ai - rem, rem);
+        f = bignumber_bitShiftGetBits(b, abits, bi - rem, rem);
+        //printf("rem t: %x\n", t);
+        //printf("rem f: %x\n", f);
+        if (t > f) {
+            return 1;
+        } else if (t < f) {
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
-u32 bignumber_bitShift(u8 *a, u8 *out, u32 abits, u32 bitShift) {
-
-	return abits + bitShift;
+inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits) {
+    assert(bitShift < abits);
+    assert(bits < 32);
+    u32 bytes = bitShift / 8;
+    u32 rem = bitShift % 8;
+    u32 res = 0;
+    res = (*(u32 *)(a+bytes) >> rem) & ((1 << (bits)) - 1);
+    return res;
 }
 
-u32 bignumber_bitShiftAdd(u8 *a, u8 *b, u32 abits, u32 bbits, u32 bitShift) {
-
-}
-
-u32 bignumber_bitShiftGet2Bytes(u8 *a, u32 abits, u32 bitShift) {
-
+inline void bignumber_bitShiftSetBits(u8 *a, u32 abits, u32 bitShift, u32 bits, u32 n) {
+    assert(bitShift < abits);
+    assert(bits <= 16);
+    u32 bytes = bitShift / 8;
+    u32 rem = bitShift % 8;
+    u32 t = 0;
+    t = *(u32 *)(a+bytes);
+    t = (t & (~(((1<<bits)-1) << rem))) | ((n & ((1<<bits)-1)) << rem);
+    *(u32 *)(a+bytes) = t;
 }
 
 void dump_bytes(u8 *a, u32 l) {
