@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define TEST 1
 
@@ -38,18 +40,20 @@ inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits);
 inline void bignumber_bitShiftSetBits(u8 *a, u32 abits, u32 bitShift, u32 bits, u32 n);
 
 void dump_bytes(u8 *a, u32 l);
-void test_bignumber_mul();
 void string_reverse(u8 *string);
 
 #ifdef TEST
 u8 bignum[] = {0xab, 0xcc, 0xfb, 0x19, 0xaa, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
 u8 bignum_e[] = {0x3c, 0x69, 0xfb, 0x75, 0x9b, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
 u8 bignum_N[] = {0xab, 0xea, 0xfb, 0x19, 0xd9, 0x33, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
+void test_bignumber_BitShiftSub(u8 *ia, u8 *ib);
+void test_bignumber_mul();
 #endif
 
 int main(int argc, char *argv[]) {
 #ifdef TEST
     test_bignumber_mul(argv[1], argv[2], argv[3]);
+    //test_bignumber_BitShiftSub(argv[1], argv[2]);
 	//u32 size = bignumber_mul(bignum, 0xfa3c, 6);
 	//dump_bytes(bignum, size);
     //u8 string[N_BYTE_SIZE * 2];
@@ -109,13 +113,13 @@ u32 bignumber_modMul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out) {
 		sum_size = bignumber_shiftAdd(sum, ta, sum_size, tsize, i);
         bytes2string(sum, sum_size, strsum);
         string_reverse(strsum);
-        printf("raw sum: %s\n", strsum);
+        //printf("raw sum: %s\n", strsum);
         sum_size = bignumber_mod(sum, N, sum_size, lN);
         //bytes2string(ta, tsize, strta);
         //string_reverse(strta);
-        bytes2string(sum, sum_size, strsum);
-        string_reverse(strsum);
-        printf("mod sum: %s\n", strsum);
+        //bytes2string(sum, sum_size, strsum);
+        //string_reverse(strsum);
+        //printf("mod sum: %s\n", strsum);
         //printf("ta: %s\n", strta);
 	}
     memcpy(out, sum, sum_size);
@@ -192,7 +196,7 @@ u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n) {
 u32 bignumber_getBitSize(u8 *a, u32 la) {
 	u32 res = (la - 1) * 8;
 	u8 byte = *(a + la - 1);
-	u32 i;
+	int i;
 	for (i=7; i>=0; i--) {
 		if ((byte & (1<<i))) {
 			res += i + 1;
@@ -207,6 +211,10 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     u32 units = bbits / 16;
     u32 rem = bbits % 16;
     u32 i, ai, bi;
+
+    //printf("abits: %d, bbits+shift: %d\n", abits, bbits+shift);
+    if (abits > bbits + shift) return 1;
+    if (abits < bbits + shift) return -1;
 
     //printf("rem: %d\n", rem);
    
@@ -244,12 +252,34 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     u32 units = bbits / 16;
     u32 rem = bbits % 16;
-    u32 i, ai, bi;
-    u32 f, t;
+    int i, ai, bi;
+    u32 f, t, ts;
     u32 carry = 1;
+    u32 res = 0;
+    u32 zflag = 0;
+
+    u8 stra[N_BYTE_SIZE*2];
+    u8 strb[N_BYTE_SIZE*2];
+
+    assert(bbits + shift <= abits);
 
     ai = shift;
     bi = 0;
+
+    bytes2string(a, (abits+7)/8, stra);
+    bytes2string(b, (bbits+7)/8, strb);
+    string_reverse(stra);
+    string_reverse(strb);
+
+    printf("shift: %d\n", shift);
+    printf("a: %s\n", stra);
+    printf("-\n");
+    printf("b: %s\n", strb);
+
+    //t = *(u32 *)(a+(abits+7)/8);
+    //t = t & ((1<<(abits%8)) - 1);
+    //*(u32 *)(a+(abits+7)/8) = t;
+    
 
     for (i=0; i<units; i++) {
         t = bignumber_bitShiftGetBits(a, abits, ai, 16);
@@ -265,28 +295,86 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     if (rem) {
         t = bignumber_bitShiftGetBits(a, abits, ai, rem);
         f = bignumber_bitShiftGetBits(b, bbits, bi, rem);
+        //printf("t: %x, f: %x, carry: %x\n", t, f, carry);
         f = (~f) & ((1<<rem)-1);
         t = t + f + carry;
+        //printf("t: %x, f: %x\n", t, f);
         carry = t >> rem;
+        //printf("rem: %x, t: %x, carry: %x\n", rem, t, carry);
         bignumber_bitShiftSetBits(a, abits, ai, rem, t);
         ai = ai + rem;
+        res = ai;
     }
 
-    if (carry) {
-        t = bignumber_getBitSize((u8 *)&carry, 1);
-        bignumber_bitShiftSetBits(a, abits, ai, t, carry);
-        ai = ai + t;
+//    if (carry && (res < abits)) {
+//        ts = bignumber_getBitSize((u8 *)&carry, 1);
+//        f = bignumber_bitShiftGetBits(a, abits, res, ts);
+//        t = carry + f + ((1<<ts)-1);
+//        
+//        bignumber_bitShiftSetBits(a, abits, ai, ts, t);
+//        ai = ai + t;
+//        res = ai;
+//    }
+    
+    if (res<abits) {
+        //carry = 0;
+        units = (abits-res) / 16;
+        rem = (abits-res) % 16;
+        for (i=0; i<units; i++) {
+            f = bignumber_bitShiftGetBits(a, abits, res, 16);
+            t = f + 0xffff + carry;
+            carry = t >> 16;
+            bignumber_bitShiftSetBits(a, abits, res, 16, t);
+            res = res + 16;
+        }
+        if (rem) {
+            f = bignumber_bitShiftGetBits(a, abits, res, rem);
+            t = f + ((1<<rem)-1) + carry;
+            t = t & ((1<<rem)-1);
+            bignumber_bitShiftSetBits(a, abits, res, 16, t);
+
+        }
+        res = abits;
     }
 
-    for (i=ai; i>=0; i++) {
-       t = bignumber_bitShiftGetBits(a, abits, i, 1); 
-       if (t) return i;
+    rem = res % 8;
+    units = res/8;
+    zflag = 1;
+
+    if (rem) {
+       f = bignumber_bitShiftGetBits(a, abits, res-rem, rem);
+       if (!f) {
+           zflag = 1;
+           res = res - rem;
+       } else {
+           zflag = 0;
+           res = bignumber_getBitSize(a, (res)/8);
+       }
     }
-    return 0;
+
+    if (zflag) {
+        for (i=units; i>=0; i--) {
+            f = *(u8 *)(a+i);
+            if (!f) {
+                res = res - 8;
+            }
+            else {
+                break;
+            }
+        }
+    }
+    //printf("ai: %d\nt: ", ai);
+    printf("\nres: %d\n", res);
+    bytes2string(a, (res+7)/8, stra);
+    string_reverse(stra);
+    //printf("bits: %d\n", res);
+    printf("res: %s\n", stra);
+//    exit(0);
+    return res;
 }
 
 inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits) {
-    assert(bitShift < abits);
+    //assert(bitShift < abits);
     assert(bits < 32);
     u32 bytes = bitShift / 8;
     u32 rem = bitShift % 8;
@@ -296,7 +384,7 @@ inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits) {
 }
 
 inline void bignumber_bitShiftSetBits(u8 *a, u32 abits, u32 bitShift, u32 bits, u32 n) {
-    assert(bitShift < abits);
+    //assert(bitShift < abits);
     assert(bits <= 16);
     u32 bytes = bitShift / 8;
     u32 rem = bitShift % 8;
@@ -395,23 +483,32 @@ u32 bytes_reverse(u8 *src, u8 *des, u32 len) {
 u32 bignumber_mod(u8 *sum, u8 *N, u32 sum_size, u32 lN) {
     u32 Nbits = bignumber_getBitSize(N, lN);
     u32 sum_bits = bignumber_getBitSize(sum, sum_size);
-    u32 shift;
+    int shift;
 
-    if (sum_size < Nbits) return sum_size;
+    if (sum_bits < Nbits) return sum_size;
 
     shift = sum_bits - Nbits;
 
     while (shift > 0) {
-        while (bignumber_BitShiftCmp(sum, N, sum_bits, Nbits, shift) == 1) {
+        if (bignumber_BitShiftCmp(sum, N, sum_bits, Nbits, shift) == -1) {
             shift--;
-            if (shift == 0) break;
+            if (shift == 0) {
+                break;
+            }
         }
         sum_bits = bignumber_BitShiftSub(sum, N, sum_bits, Nbits, shift);
+        if (sum_bits > Nbits) {
+            shift = sum_bits - Nbits;
+        } else {
+            break;
+        }
     }
+
+out:
     if (bignumber_BitShiftCmp(sum, N, sum_bits, Nbits, 0) == 1) {
         sum_bits = bignumber_BitShiftSub(sum, N, sum_bits, Nbits, 0);
     }
-    return sum_bits;
+    return (sum_bits+7)/8;
 }
 
 void dump_bytes(u8 *a, u32 l) {
@@ -426,6 +523,8 @@ void dump_bytes(u8 *a, u32 l) {
 
 #ifdef TEST
 void test_bignumber_mul(u8 *ia, u8 *ib, u8 *iN) {
+
+    pid_t pid;
     u8 stra[N_BYTE_SIZE*2];
     u8 strb[N_BYTE_SIZE*2];
     u8 a[N_BYTE_SIZE];
@@ -435,6 +534,9 @@ void test_bignumber_mul(u8 *ia, u8 *ib, u8 *iN) {
     u8 strres[N2_BYTE_SIZE*2];
     u8 strN[N2_BYTE_SIZE*2];
     u32 as, bs, Ns, rs;
+
+    pid = getpid();
+    printf("pid: %d\n", pid);
 
     strcpy(stra, ia);
     strcpy(strb, ib);
@@ -460,6 +562,46 @@ void test_bignumber_mul(u8 *ia, u8 *ib, u8 *iN) {
     //dump_bytes(res, rs);
 
     bytes2string(res, rs, strres);
+    string_reverse(strres);
+    printf("output:\n");
+    printf("%s\n", strres);
+}
+
+void test_bignumber_BitShiftSub(u8 *ia, u8 *ib) {
+    pid_t pid;
+    u8 stra[N_BYTE_SIZE*2];
+    u8 strb[N_BYTE_SIZE*2];
+    u8 a[N_BYTE_SIZE];
+    u8 b[N_BYTE_SIZE];
+    u8 res[N2_BYTE_SIZE];
+    u8 strres[N2_BYTE_SIZE*2];
+    u32 as, bs, abits, bbits;
+
+    pid = getpid();
+    printf("pid: %d\n", pid);
+
+    strcpy(stra, ia);
+    strcpy(strb, ib);
+    printf("a:\n");
+    printf("%s\n", stra);
+    printf("b:\n");
+    printf("%s\n", strb);
+    
+    string_reverse(stra);
+    string_reverse(strb);
+
+    as = string2bytes(stra, a);
+    bs = string2bytes(strb, b);
+
+    abits = bignumber_getBitSize(a, as);
+    bbits = bignumber_getBitSize(b, bs);
+    
+    //dump_bytes(a, as);
+    //dump_bytes(b, bs);
+    as = bignumber_BitShiftSub(a, b, abits, bbits, 1);
+    //dump_bytes(res, rs);
+
+    bytes2string(a, (as+7)/8, strres);
     string_reverse(strres);
     printf("output:\n");
     printf("%s\n", strres);
