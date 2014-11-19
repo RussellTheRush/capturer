@@ -297,10 +297,11 @@ u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n) {
 u32 bignumber_getBitSize(u8 *a, u32 la) {
 	u32 res = (la - 1) * 8;
 	u8 byte = *(a + la - 1);
+	printf("#byte: %x, la-1: %d\n", byte, la-1);
 	int i;
 	for (i=7; i>=0; i--) {
 		if ((byte & (1<<i))) {
-			res += i + 1;
+			res = res + i;
 			break;
 		}
 	}
@@ -450,7 +451,7 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     if (rem) {
         t = *(u8 *)(a+(i/8));
         t = t & ((1<<rem)-1);
-        printf("#t: %x, rem: %d\n", t, rem);
+        printf("#ZZZZt: %x, rem: %d, i: %d\n", t, rem, i);
         if (!t) {
             i = i - rem;
             needTrim = 1;
@@ -463,7 +464,7 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 
     for (; (i>=0) && (needTrim==1); ) {
         t = *(u8 *)(a+(i/8));
-        //printf("#t: %x, \n", t);
+        printf("#FFFt: %x, i: %d\n", t, i);
         if (t) {
             needTrim = 0;
             for (k=7; k>=0; k--) {
@@ -617,6 +618,8 @@ u32 bignumber_mod(u8 *sum, u8 *N, u32 sum_size, u32 lN) {
     u32 Nbits = bignumber_getBitSize(N, lN);
     u32 sum_bits = bignumber_getBitSize(sum, sum_size);
     int shift;
+
+	printf("#Nbits: %d, sum_bits: %d\n", Nbits, sum_bits);
 
     if (sum_bits < Nbits) return sum_size;
 
