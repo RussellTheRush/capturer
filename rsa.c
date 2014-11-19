@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define TEST 1
+//#define TEST 1
 
 #define N_BYTE_SIZE	(1024/8)
 #define N2_BYTE_SIZE	(2048/8)
@@ -68,6 +68,7 @@ void rsa_init();
 u32 rsa_encrypt(u8 *M, u32 Mbyte, u8 *out);
 u32 rsa_decrypt(u8 *M, u32 Mbyte, u8 *out);
 
+void printBytesAsHexString(u8 *bytes, u32 size);
 
 int main(int argc, char *argv[]) {
 #ifdef TEST
@@ -111,17 +112,28 @@ int main(int argc, char *argv[]) {
     //u32 cmp_res = bignumber_BitShiftCmp(a, b, sa, sb, sa - sb);
     //printf("cmp_res %d\n", cmp_res);
 #endif
-    u8 msg[] = {0x11, 0x72, 0x31, 0x38, 0x91, 0x11};
+    u8 msg[] = {0x18, 0x78, 0x31, 0x38, 0x91, 0x11, 0x3f, 0xee, 0x78, 0xcd, 0x96, 0xab};
     u8 enc[N_BYTE_SIZE];
-    u8 str[N2_BYTE_SIZE];
-    u32 enc_size, str_size;
+    u8 enc_cpy[N_BYTE_SIZE];
+    u32 enc_size, enc_size_cpy;
     rsa_init();
     enc_size = rsa_encrypt(msg, sizeof(msg), enc);
-    str_size = bytes2string(enc, enc_size, str);
-    string_reverse(str);
-    printf("#enc:\n%s\n", str);
+    memcpy(enc_cpy, enc, enc_size);
+    enc_size_cpy = enc_size;
     enc_size = rsa_decrypt(enc, enc_size, enc);
-    dump_bytes(enc, enc_size);
+
+    printf("#RSA N: ");
+    printBytesAsHexString(rsa_N, rsa_Nbytes);
+    printf("#RSA e: ");
+    printBytesAsHexString(rsa_e, rsa_ebytes);
+    printf("#RSA d: ");
+    printBytesAsHexString(rsa_d, rsa_dbytes);
+    printf("#RSA msg: ");
+    printBytesAsHexString(msg, sizeof(msg));
+    printf("#RSA enc(msg): ");
+    printBytesAsHexString(enc_cpy, enc_size_cpy);
+    printf("#RSA dec(enc(msg)): ");
+    printBytesAsHexString(enc, enc_size);
 	return 0;
 }
 
@@ -152,8 +164,21 @@ u32 bignumber_modMul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out) {
 	u8 sum[N2_BYTE_SIZE] = {0};
 	u32 tsize;
 	u32 sum_size = 0;
-    u8 strta[N2_BYTE_SIZE*2];
-    u8 strsum[N2_BYTE_SIZE*2];
+
+#ifdef TEST
+    u8 a_cpy[N2_BYTE_SIZE];
+    u8 b_cpy[N2_BYTE_SIZE];
+    u8 N_cpy[N2_BYTE_SIZE];
+    u8 a_mul_b[N2_BYTE_SIZE];
+    u32 la_cpy = la;
+    u32 lb_cpy = lb;
+    u32 lN_cpy = lN;
+    u32 a_mul_b_size;
+
+    memcpy(a_cpy, a, la_cpy);
+    memcpy(b_cpy, b, lb_cpy);
+    memcpy(N_cpy, N, lN_cpy);
+#endif
 
 	for (i=0; i<lb; i+=2) {
 		if (i == lb-1) {
@@ -165,24 +190,22 @@ u32 bignumber_modMul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out) {
 		tsize = bignumber_mul(a, t, la, ta);
 		sum_size = bignumber_shiftAdd(sum, ta, sum_size, tsize, i);
 
-        //bytes2string(sum, sum_size, strsum);
-        //string_reverse(strsum);
-        //printf("raw sum: %s\n", strsum);
-
-        //sum_size = bignumber_mod(sum, N, sum_size, lN);
-
-
-        //bytes2string(ta, tsize, strta);
-        //string_reverse(strta);
-        //bytes2string(sum, sum_size, strsum);
-        //string_reverse(strsum);
-        //printf("mod sum: %s\n", strsum);
-        //printf("ta: %s\n", strta);
 	}
+#ifdef TEST
+    memcpy(a_mul_b, sum, sum_size);
+    a_mul_b_size = sum_size;
+#endif
     sum_size = bignumber_mod(sum, N, sum_size, lN);
 
     memcpy(out, sum, sum_size);
-	//dump_bytes(sum, sum_size);
+#ifdef TEST
+    printf("test modMul\n");
+    printBytesAsHexString(a_cpy, la_cpy);
+    printBytesAsHexString(b_cpy, lb_cpy);
+    printBytesAsHexString(N_cpy, lN_cpy);
+    printBytesAsHexString(a_mul_b, a_mul_b_size);
+    printBytesAsHexString(out, sum_size);
+#endif
 	return sum_size;
 }
 
@@ -225,39 +248,46 @@ u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n) {
 	u32 carry = 0;
 	u32 t;
 	u32 f;
-	u32 i;
-	for (i=0; i<tsize; i+=2) {
-		if (i == tsize-1) {
-			t = (*(u32 *)(ta + i)) & 0xff;
-		}
-		else  {
-			t = (*(u32 *)(ta + i)) & 0xffff;
-		}
+    int i,j;
 
-		if (i+n < sum_size-1) {
-			f = (*(u32 *)(sum + i + n)) & 0xffff;
-		} else if (i+n == sum_size-1){
-			f = (*(u32 *)(sum + i + n)) & 0xff;
-		} else {
-			f = 0;
-		}
+	for (i=0,j=n; (i<tsize-1) && (j<sum_size-1); i+=2, j+=2) {
+        t = (*(u32 *)(ta + i)) & 0xffff;
+        f = (*(u32 *)(sum + j)) & 0xffff;
 
-        //printf("t: %x, f: %x ", t, f);
 		t = f + t + carry;
-		carry = (t & (~0xffff)) >> 16;
-        //printf("carry: %x t+f:%x\n", carry, t);
-		(*(u16 *)(sum + i + n)) = t & 0xffff;
+
+        carry = (t >> 16) & 0xffff;
+        (*(u16 *)(sum + j)) = t & 0xffff;
 	}
-    if (i+n > ret_size) {
-        ret_size = i+n;
-        while (!*(u8 *)(sum + ret_size -1)) ret_size--;
+
+    for (; i < tsize; i++) {
+        t = *(u8 *)(ta+i);
+        if (j < sum_size) {
+            f = *(u8 *)(sum + j);
+        } else {
+            f = 0;
+        }
+        t = t + f + carry;
+        carry = (t >> 8) & 0xff;
+        (*(u8 *)(sum + j)) = t;
+        j++;
     }
 
-	if (carry != 0) {
-		(*(u16 *)(sum + i + n)) = t & 0xffff;
-		if ((carry & 0xff00) != 0) ret_size = ret_size + 2;
-		else ret_size = ret_size + 1;
-	}
+    while (carry) {
+        if (j < sum_size) {
+            f = *(u8 *)(sum + j);
+        } else {
+            f = 0;
+        }
+        t = f + carry;
+        carry = (t >> 8) & 0xff;
+        (*(u8 *)(sum + j)) = t;
+        j++;
+    }
+
+    ret_size = j;
+    if (ret_size < sum_size) ret_size = sum_size;
+
 	return ret_size;
 }
 
@@ -335,10 +365,11 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 #ifdef TEST
     u8 a_cpy[N2_BYTE_SIZE];
     u8 b_cpy[N2_BYTE_SIZE];
-    u32 abytes_cpy = abytes;
-    u32 bbytes_cpy = bbytes;
-    memcpy(a_cpy, a, abytes);
-    memcpy(b_cpy, b, bbytes);
+    u32 abytes_cpy = (abits+7)/8;
+    u32 bbytes_cpy = (bbits+7)/8;
+    u32 shift_cpy = shift;
+    memcpy(a_cpy, a, abytes_cpy);
+    memcpy(b_cpy, b, bbytes_cpy);
 #endif
 
 
@@ -367,16 +398,6 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
         res = ai;
     }
 
-//    if (carry && (res < abits)) {
-//        ts = bignumber_getBitSize((u8 *)&carry, 1);
-//        f = bignumber_bitShiftGetBits(a, abits, res, ts);
-//        t = carry + f + ((1<<ts)-1);
-//        
-//        bignumber_bitShiftSetBits(a, abits, ai, ts, t);
-//        ai = ai + t;
-//        res = ai;
-//    }
-    
     if (res<abits) {
         //carry = 0;
         units = (abits-res) / 16;
@@ -427,13 +448,13 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     }
 
     res = bignumber_getBitSize(a, (res+7)/8);
-    //printf("ai: %d\nt: ", ai);
-    //printf("res: %d\n", res);
-    //bytes2string(a, (res+7)/8, stra);
-    //string_reverse(stra);
-    //printf("res: %s\n", stra);
-    //printf("bits: %d\n", res);
-//    exit(0);
+#ifdef TEST
+    printf("test shiftSub\n");
+    printf("%d\n", shift_cpy);
+    printBytesAsHexString(a_cpy, abytes_cpy);
+    printBytesAsHexString(b_cpy, bbytes_cpy);
+    printBytesAsHexString(a, (res+7)/8);
+#endif
     return res;
 }
 
@@ -552,6 +573,16 @@ u32 bignumber_mod(u8 *sum, u8 *N, u32 sum_size, u32 lN) {
 
     if (sum_bits < Nbits) return sum_size;
 
+#ifdef TEST
+    u8 sum_cpy[N2_BYTE_SIZE];
+    u8 N_cpy[N2_BYTE_SIZE];
+    u32 sum_size_cpy = sum_size;
+    u32 lN_cpy = lN;
+
+    memcpy(sum_cpy, sum, sum_size_cpy);
+    memcpy(N_cpy, N, lN_cpy);
+#endif
+
     shift = sum_bits - Nbits;
 
     while (shift > 0) {
@@ -573,6 +604,12 @@ out:
     if (bignumber_BitShiftCmp(sum, N, sum_bits, Nbits, 0) == 1) {
         sum_bits = bignumber_BitShiftSub(sum, N, sum_bits, Nbits, 0);
     }
+#ifdef TEST
+    printf("test mode\n");
+    printBytesAsHexString(sum_cpy, sum_size_cpy);
+    printBytesAsHexString(N_cpy, lN_cpy);
+    printBytesAsHexString(sum, (sum_bits+7)/8);
+#endif
     return (sum_bits+7)/8;
 }
 
@@ -638,6 +675,12 @@ u32 bignumber_modPow(u8 *a, u8 *b, u8 *N, u32 abytes, u32 bbytes, u32 Nbytes, u8
     return sum_size;
 }
 
+void printBytesAsHexString(u8 *bytes, u32 size) {
+    u8 str[N2_BYTE_SIZE*2];
+    bytes2string(bytes, size, str);
+    string_reverse(str);
+    printf("%s\n", str);
+}
 
 #ifdef TEST
 void dump_bytes(u8 *a, u32 l) {
@@ -768,10 +811,4 @@ void test_bignumber_BitShiftSub(u8 *ia, u8 *ib) {
     printBytesAsHexString(a, (as+7)/8);
 }
 
-void printBytesAsHexString(u8 *bytes, u32 size) {
-    u8 str[N2_BYTE_SIZE];
-    bytes2string(bytes, size, str);
-    string_reverse(str);
-    printf("%s\n", str);
-}
 #endif
