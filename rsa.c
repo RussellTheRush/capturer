@@ -4,16 +4,18 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-//#define TEST 1
+#define TEST 1
 
 #define N_BYTE_SIZE	(1024/8)
 #define N2_BYTE_SIZE	(2048/8)
 
 #define ARRAY_SIZE(a)	(sizeof(a)/sizeof(a[0]))
 
-#define STR_N       "26DD2D997696AA52EDDF7CA1C9979DF355179EAA98D76D736F3C7EC4C22E96BBDE029672EDA467544A1F1678E901A24A67FE4CE413BE7AAEA6328E397E7E15AF"
+//#define STR_N       "26DD2D997696AA52EDDF7CA1C9979DF355179EAA98D76D736F3C7EC4C22E96BBDE029672EDA467544A1F1678E901A24A67FE4CE413BE7AAEA6328E397E7E15AF"
+#define STR_N       "9628686253532F6A07852BE7744E20B1880737AA4FACB5B44E6EB91749CB64D99879724308C928449633238D5F245E10AC01A6D57D5513D7EC67EC726B41C3E7"
 #define STR_e       "10001"
-#define STR_d       "186D0EC9D334E29BF8916C1DAB3C35B3C8196E49BE82377243C97BCB625831B81DF64BA29B057A333359FB55736727B6EA9C50261B7B6AE44C319F3F134C1481"
+//#define STR_d       "186D0EC9D334E29BF8916C1DAB3C35B3C8196E49BE82377243C97BCB625831B81DF64BA29B057A333359FB55736727B6EA9C50261B7B6AE44C319F3F134C1481"
+#define STR_d       "25276A6CA9E17361F0EA6AAAA28492625B1E2E0FDE1705FECF496652F4D776E45F21356CDFAE8B9DBA6925D0762CBE3842B2B44CF814EA413BEEACCA60E9DE81"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -112,7 +114,8 @@ int main(int argc, char *argv[]) {
     //u32 cmp_res = bignumber_BitShiftCmp(a, b, sa, sb, sa - sb);
     //printf("cmp_res %d\n", cmp_res);
 #endif
-    u8 msg[] = {0x18, 0x78, 0x31, 0x38, 0x91, 0x11, 0x3f, 0xee, 0x78, 0xcd, 0x96, 0xab};
+    //u8 msg[] = {0x18, 0x78, 0x31, 0x38, 0x91, 0x11, 0x3f, 0xee, 0x78, 0xcd, 0x96, 0xab, 0x98, 0x33};
+    u8 msg[] = {0x4d, 0x9c, 0x03, 0x11};
     u8 enc[N_BYTE_SIZE];
     u8 enc_cpy[N_BYTE_SIZE];
     u32 enc_size, enc_size_cpy;
@@ -322,9 +325,9 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
         ai -= 16;
         bi -= 16;
         t = bignumber_bitShiftGetBits(a, abits, ai, 16);
+        printf("#cmp t: %x\n", t);
         f = bignumber_bitShiftGetBits(b, bbits, bi, 16);
-        //printf("t: %x\n", t);
-        //printf("f: %x\n", f);
+        printf("#cmp f: %x\n", f);
         if (t > f) {
             return 1;
         } else if (t < f) {
@@ -348,112 +351,146 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 }
 
 u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
-    u32 units = bbits / 16;
-    u32 rem = bbits % 16;
-    int i, ai, bi;
-    u32 f, t, ts;
+
+    u32 units;
+    u32 rem;
+    u32 f, t;
     u32 carry = 1;
     u32 res = 0;
-    u32 zflag = 0;
+    u32 abytes = (abits)/8;
+    u32 bbytes = (bbits)/8;
+    int i, j, k;
+    int needTrim = 0;
 
 
     assert(bbits + shift <= abits);
 
-    ai = shift;
-    bi = 0;
-
 #ifdef TEST
     u8 a_cpy[N2_BYTE_SIZE];
     u8 b_cpy[N2_BYTE_SIZE];
-    u32 abytes_cpy = (abits+7)/8;
-    u32 bbytes_cpy = (bbits+7)/8;
+
+    u32 abytes_cpy = abytes;
+    u32 bbytes_cpy = bbytes;
     u32 shift_cpy = shift;
     memcpy(a_cpy, a, abytes_cpy);
     memcpy(b_cpy, b, bbytes_cpy);
 #endif
+    
+
+    i = shift;
+    j = 0;
+    rem = 16 - (shift % 16);
 
 
-    for (i=0; i<units; i++) {
-        t = bignumber_bitShiftGetBits(a, abits, ai, 16);
-        f = bignumber_bitShiftGetBits(b, bbits, bi, 16);
+    //printf("#rem %d\n", rem);
+
+    if (rem) {
+        t = bignumber_bitShiftGetBits(a, abits, i, rem);
+        f = bignumber_bitShiftGetBits(b, bbits, j, rem);
+        //printf("#A:\n#");
+        //printBytesAsHexString(a, abytes);
+        //printf("#B:\n#");
+        //printBytesAsHexString(b, bbytes);
+        //printf("#t: %x, f: %x, carry: %x\n", t, f, carry);
+        f = (~f) & ((1<<rem)-1);
+        t = t + f + carry;
+        //printf("#t: %x, f: %x\n", t, f);
+        carry = t >> rem;
+        t = t & ((1<<rem)-1);
+        //printf("#rem: %x, t: %x, carry: %x, t<<rem: %x\n", rem, t, carry, t<<(i%8));
+        bignumber_bitShiftSetBits(a, abits, i, rem, t);
+        //printf("#C:\n#");
+        //printBytesAsHexString(a, abytes);
+        i = i + rem;
+        j = j + rem;
+    }
+
+    //printf("#i %d, units: %d\n", i, (abits-i)%16);
+    //
+    rem = (abits - i) % 16;
+    units = (abits - i)/16;
+
+    for (k=0; k<units; k++) {
+        t = *(u16 *)(a+(i/8));
+        f = bignumber_bitShiftGetBits(b, bbits, j, 16);
         f = (~f) & 0xffff;
         t = t + f + carry;
         carry = t >> 16;
-        bignumber_bitShiftSetBits(a, abits, ai, 16, t);
-        ai = ai + 16;
-        bi = bi + 16;
+        *(u16 *)(a+(i/8)) = t;
+        //if (k == units-1) {
+        //    printf("#final units t: %x\n#", t);
+        //    printBytesAsHexString(a, abytes);
+        //}
+        i = i + 16;
+        j = j + 16;
     }
+    //printf("#i: %d\n", i);
 
     if (rem) {
-        t = bignumber_bitShiftGetBits(a, abits, ai, rem);
-        f = bignumber_bitShiftGetBits(b, bbits, bi, rem);
-        //printf("t: %x, f: %x, carry: %x\n", t, f, carry);
+        t = bignumber_bitShiftGetBits(a, abits, i, rem);
+        f = bignumber_bitShiftGetBits(b, bbits, j, rem);
+        printf("#t: %x, f: %x, carry: %x, f<<%x\n", t, f, carry, f<<(j%8));
         f = (~f) & ((1<<rem)-1);
         t = t + f + carry;
         //printf("t: %x, f: %x\n", t, f);
         carry = t >> rem;
-        //printf("rem: %x, t: %x, carry: %x\n", rem, t, carry);
-        bignumber_bitShiftSetBits(a, abits, ai, rem, t);
-        ai = ai + rem;
-        res = ai;
+        t = t & ((1<<rem)-1);
+        printf("#rem: %x, t: %x, f: %x, carry: %x, t<<%x\n", rem, t, f, carry, t<<(i%8));
+        bignumber_bitShiftSetBits(a, abits, i, rem, t);
+        //printf("#AAA:\n#");
+        //printBytesAsHexString(a, abytes);
+        i = i + rem;
+        j = j + rem;
     }
 
-    if (res<abits) {
-        //carry = 0;
-        units = (abits-res) / 16;
-        rem = (abits-res) % 16;
-        for (i=0; i<units; i++) {
-            f = bignumber_bitShiftGetBits(a, abits, res, 16);
-            t = f + 0xffff + carry;
-            carry = t >> 16;
-            bignumber_bitShiftSetBits(a, abits, res, 16, t);
-            res = res + 16;
-        }
-        if (rem) {
-            f = bignumber_bitShiftGetBits(a, abits, res, rem);
-            t = f + ((1<<rem)-1) + carry;
-            t = t & ((1<<rem)-1);
-            bignumber_bitShiftSetBits(a, abits, res, 16, t);
-            res = res + rem;
-        }
-    }
-
-    rem = res % 8;
-    units = res/8;
-    zflag = 1;
+    rem = i % 8;
+    needTrim = 1;
+    //printf("#MMMM i: %d, abits: %d\n", i, abits);
 
     if (rem) {
-       f = bignumber_bitShiftGetBits(a, abits, res-rem, rem);
-       //printf("res: %d, f: %x, rem: %d\n", res, f, rem);
-       if (!f) {
-           zflag = 1;
-           res = res - rem;
-       } else {
-           zflag = 0;
-           res = bignumber_getBitSize(a, (res+7)/8);
-       }
-    }
-
-    if (zflag) {
-        for (i=units-1; i>=0; i--) {
-            f = *(u8 *)(a+i);
-            //printf("AAf: %x, res: %d\n", f, res);
-            if (!f) {
-                res = res - 8;
-            }
-            else {
-                break;
-            }
+        t = *(u8 *)(a+(i/8));
+        t = t & ((1<<rem)-1);
+        printf("#t: %x, rem: %d\n", t, rem);
+        if (!t) {
+            i = i - rem;
+            needTrim = 1;
+        } else {
+            needTrim = 0;
         }
     }
 
-    res = bignumber_getBitSize(a, (res+7)/8);
+    //printf("#KKKK i: %d\n", i);
+
+    for (; (i>=0) && (needTrim==1); ) {
+        t = *(u8 *)(a+(i/8));
+        //printf("#t: %x, \n", t);
+        if (t) {
+            needTrim = 0;
+            for (k=7; k>=0; k--) {
+                if ((t & (1<<k))) {
+                    i = i + k;
+                    break;
+                }
+            }
+            break;
+        } else {
+            i = i - 8;
+        }
+        //printf("#LLL: %d\n", i);
+    }
+
+    if (i < 0) i = 0;
+
+    res = i;
+
+
 #ifdef TEST
     printf("test shiftSub\n");
+    printf("#res: %d\n", res);
     printf("%d\n", shift_cpy);
     printBytesAsHexString(a_cpy, abytes_cpy);
     printBytesAsHexString(b_cpy, bbytes_cpy);
-    printBytesAsHexString(a, (res+7)/8);
+    printBytesAsHexString(a, (res)/8);
 #endif
     return res;
 }
@@ -464,7 +501,17 @@ inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits) {
     u32 bytes = bitShift / 8;
     u32 rem = bitShift % 8;
     u32 res = 0;
-    res = (*(u32 *)(a+bytes) >> rem) & ((1 << (bits)) - 1);
+
+    if (bitShift + bits < abits) {
+        printf("#AgetBits: a+bytes: %x, shift: %d, abits: %d, bits: %d\n", *(u32*)(a+bytes), bitShift, abits, bits);
+        res = (*(u32 *)(a+bytes) >> rem) & ((1 << (bits)) - 1);
+    } else if (bitShift <= abits) {
+        rem = abits - bitShift;
+        printf("#BgetBits: a+bytes: %x, shift: %d, abits: %d, bits: %d\n", *(u32*)(a+bytes), bitShift, abits, bits);
+        res = ((*(u32 *)(a+bytes))>>(bitShift%8) )& ((1<<rem)-1);
+    } else {
+        res = 0;
+    }
     return res;
 }
 
@@ -608,9 +655,9 @@ out:
     printf("test mode\n");
     printBytesAsHexString(sum_cpy, sum_size_cpy);
     printBytesAsHexString(N_cpy, lN_cpy);
-    printBytesAsHexString(sum, (sum_bits+7)/8);
+    printBytesAsHexString(sum, (sum_bits)/8);
 #endif
-    return (sum_bits+7)/8;
+    return (sum_bits)/8;
 }
 
 u32 bignumber_modPow(u8 *a, u8 *b, u8 *N, u32 abytes, u32 bbytes, u32 Nbytes, u8 *out) {
@@ -777,16 +824,18 @@ void test_bignumber_mul(u8 *ia, u8 *ib, u8 *iN) {
 }
 
 void test_bignumber_BitShiftSub(u8 *ia, u8 *ib) {
-    pid_t pid;
-    u8 stra[N_BYTE_SIZE*2];
-    u8 strb[N_BYTE_SIZE*2];
+    u8 stra[N_BYTE_SIZE*2] = "10526e6c0ba918c25ec5c80ed208e43f744d04234d43e08569b4ad99f6f72d756454a2dd60f529456c33d3e483e12cf76a521e17a48c15d3d8b1050628e50d677b7e2e2ecda3fb57b76acc4e214f327b15f322cc9d4b59aefdacd02d20808f9e125152cedb1a6039cb28c172f7b90081";
+    u8 strb[N_BYTE_SIZE*2] = "9628686253532f6a07852be7744e20b1880737aa4facb5b44e6eb91749cb64d99879724308c928449633238d5f245e10ac01a6d57d5513d7ec67ec726b41c3e7";
     u8 a[N_BYTE_SIZE];
     u8 b[N_BYTE_SIZE];
     u8 res[N2_BYTE_SIZE];
     u32 as, bs, abits, bbits;
+    u32 shift;
 
-    strcpy(stra, ia);
-    strcpy(strb, ib);
+    //strcpy(stra, ia);
+    //strcpy(strb, ib);
+    //
+    shift = 379;
 
     printf("#a:\n");
     printf("#%s\n", stra);
@@ -801,14 +850,15 @@ void test_bignumber_BitShiftSub(u8 *ia, u8 *ib) {
 
     abits = bignumber_getBitSize(a, as);
     bbits = bignumber_getBitSize(b, bs);
+
     
     //dump_bytes(a, as);
     //dump_bytes(b, bs);
-    as = bignumber_BitShiftSub(a, b, abits, bbits, 1);
+    as = bignumber_BitShiftSub(a, b, abits, bbits, shift);
     //dump_bytes(res, rs);
 
     printf("#output:\n#");
-    printBytesAsHexString(a, (as+7)/8);
+    printBytesAsHexString(a, (as)/8);
 }
 
 #endif
