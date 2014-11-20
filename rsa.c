@@ -301,7 +301,7 @@ u32 bignumber_getBitSize(u8 *a, u32 la) {
 	int i;
 	for (i=7; i>=0; i--) {
 		if ((byte & (1<<i))) {
-			res = res + i;
+			res = res + i + 1;
 			break;
 		}
 	}
@@ -358,8 +358,8 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     u32 f, t;
     u32 carry = 1;
     u32 res = 0;
-    u32 abytes = (abits)/8;
-    u32 bbytes = (bbits)/8;
+    u32 abytes = (abits+7)/8;
+    u32 bbytes = (bbits+7)/8;
     int i, j, k;
     int needTrim = 0;
 
@@ -408,8 +408,9 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 
     //printf("#i %d, units: %d\n", i, (abits-i)%16);
     //
-    rem = (abits - i) % 16;
-    units = (abits - i)/16;
+    if (i<abits) {
+    rem = (abits - i - 1) % 16;
+    units = (abits - i - 1)/16;
 
     for (k=0; k<units; k++) {
         t = *(u16 *)(a+(i/8));
@@ -443,8 +444,9 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
         i = i + rem;
         j = j + rem;
     }
+    }
 
-    rem = i % 8;
+    rem = (i+1) % 8;
     needTrim = 1;
     //printf("#MMMM i: %d, abits: %d\n", i, abits);
 
@@ -482,7 +484,7 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 
     if (i < 0) i = 0;
 
-    res = i;
+    res = i + 1;
 
 
 #ifdef TEST
@@ -491,7 +493,7 @@ u32 bignumber_BitShiftSub(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     printf("%d\n", shift_cpy);
     printBytesAsHexString(a_cpy, abytes_cpy);
     printBytesAsHexString(b_cpy, bbytes_cpy);
-    printBytesAsHexString(a, (res)/8);
+    printBytesAsHexString(a, (res+7)/8);
 #endif
     return res;
 }
@@ -504,11 +506,11 @@ inline u32 bignumber_bitShiftGetBits(u8 *a, u32 abits, u32 bitShift, u32 bits) {
     u32 res = 0;
 
     if (bitShift + bits < abits) {
-        printf("#AgetBits: a+bytes: %x, shift: %d, abits: %d, bits: %d\n", *(u32*)(a+bytes), bitShift, abits, bits);
+        //printf("#AgetBits: a+bytes: %x, shift: %d, abits: %d, bits: %d\n", *(u32*)(a+bytes), bitShift, abits, bits);
         res = (*(u32 *)(a+bytes) >> rem) & ((1 << (bits)) - 1);
-    } else if (bitShift <= abits) {
+    } else if (bitShift < abits) {
         rem = abits - bitShift;
-        printf("#BgetBits: a+bytes: %x, shift: %d, abits: %d, bits: %d\n", *(u32*)(a+bytes), bitShift, abits, bits);
+        //printf("#BgetBits: a+bytes: %x, shift: %d, abits: %d, bits: %d\n", *(u32*)(a+bytes), bitShift, abits, bits);
         res = ((*(u32 *)(a+bytes))>>(bitShift%8) )& ((1<<rem)-1);
     } else {
         res = 0;
@@ -620,6 +622,10 @@ u32 bignumber_mod(u8 *sum, u8 *N, u32 sum_size, u32 lN) {
     int shift;
 
 	printf("#Nbits: %d, sum_bits: %d\n", Nbits, sum_bits);
+    printf("#");
+    printBytesAsHexString(sum, sum_size);
+    printf("#");
+    printBytesAsHexString(N, lN);
 
     if (sum_bits < Nbits) return sum_size;
 
@@ -659,8 +665,9 @@ out:
     printBytesAsHexString(sum_cpy, sum_size_cpy);
     printBytesAsHexString(N_cpy, lN_cpy);
     printBytesAsHexString(sum, (sum_bits)/8);
+    printf("#sum_bts/8: %d\n", (sum_bits+7)/8);
 #endif
-    return (sum_bits)/8;
+    return (sum_bits+7)/8;
 }
 
 u32 bignumber_modPow(u8 *a, u8 *b, u8 *N, u32 abytes, u32 bbytes, u32 Nbytes, u8 *out) {
