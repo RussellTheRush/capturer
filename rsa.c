@@ -99,7 +99,7 @@ int libperm_rsa_modPow(u8 *msg, u32 msgBytes, u8 *strE, u32 strELen, u8 *strN, u
     return (int)sum_bytes;
 }
 
-#ifdef IS_LIB
+#ifndef IS_LIB
 
 int main(int argc, char *argv[]) {
 #ifdef TEST
@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
     //printf("cmp_res %d\n", cmp_res);
 #endif
     //u8 msg[] = {0x18, 0x78, 0x31, 0x38, 0x91, 0x11, 0x3f, 0xee, 0x78, 0xcd, 0x96, 0xab, 0x98, 0x33};
-    u8 msg[] = {0x4d, 0x9c, 0x03, 0x11, 0x3e, 0x78, 0x77, 0x12};
+    u8 msg[] = {0x4d, 0x9c, 0x03, 0x11, 0x3e, 0x78, 0x77, 0x12, 0x13, 0x1a};
     u8 enc[N_BYTE_SIZE];
     u8 enc_cpy[N_BYTE_SIZE];
     u32 enc_size, enc_size_cpy;
