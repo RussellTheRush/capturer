@@ -6,7 +6,7 @@
 #include "libperm_rsa.h"
 
 //#define TEST 1
-//#define IS_LIB
+#define IS_LIB
 
 #define ARRAY_SIZE(a)	(sizeof(a)/sizeof(a[0]))
 
@@ -46,16 +46,6 @@ void string_reverse(u8 *string);
 //#define STR_d       "186D0EC9D334E29BF8916C1DAB3C35B3C8196E49BE82377243C97BCB625831B81DF64BA29B057A333359FB55736727B6EA9C50261B7B6AE44C319F3F134C1481"
 //#define STR_d       "25276A6CA9E17361F0EA6AAAA28492625B1E2E0FDE1705FECF496652F4D776E45F21356CDFAE8B9DBA6925D0762CBE3842B2B44CF814EA413BEEACCA60E9DE81"
 #define STR_d       "4E5A3FA4B3A81CD8B82926EA98FE717CD0DF5D0FD427D6B5B9BABD3AB23A50FF9B31999789AE0099CA48E20594D8538A61F1E41477348DEA28513474AA50CD4D"
-void dump_bytes(u8 *a, u32 l);
-#ifdef TEST
-u8 bignum[] = {0xab, 0xcc, 0xfb, 0x19, 0xaa, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
-u8 bignum_e[] = {0x3c, 0x69, 0xfb, 0x75, 0x9b, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
-u8 bignum_N[] = {0xab, 0xea, 0xfb, 0x19, 0xd9, 0x33, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
-void test_bignumber_BitShiftSub(u8 *ia, u8 *ib);
-void test_bignumber_mul();
-void test_bignumber_modPow();
-void test_bignumber_modPow(u8 *ia, u8 *ib, u8 *iN);
-#endif
 
 static u8 rsa_N[N_BYTE_SIZE];
 static u8 rsa_e[N_BYTE_SIZE];
@@ -66,8 +56,18 @@ static u32 rsa_Nbytes, rsa_ebytes, rsa_dbytes;
 void rsa_init();
 u32 rsa_encrypt(u8 *M, u32 Mbyte, u8 *out);
 u32 rsa_decrypt(u8 *M, u32 Mbyte, u8 *out);
-void printBytesAsHexString(u8 *bytes, u32 size);
 #endif //IS_LIB
+
+#ifdef TEST
+u8 bignum[] = {0xab, 0xcc, 0xfb, 0x19, 0xaa, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
+u8 bignum_e[] = {0x3c, 0x69, 0xfb, 0x75, 0x9b, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
+u8 bignum_N[] = {0xab, 0xea, 0xfb, 0x19, 0xd9, 0x33, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00}; //little endian
+void test_bignumber_BitShiftSub(u8 *ia, u8 *ib);
+void test_bignumber_mul();
+void test_bignumber_modPow();
+void test_bignumber_modPow(u8 *ia, u8 *ib, u8 *iN);
+void printBytesAsHexString(u8 *bytes, u32 size);
+#endif
 
 
 int libperm_rsa_modPow(u8 *msg, u32 msgBytes, u8 *strE, u32 strELen, u8 *strN, u32 strNLen, u8 *out) {
@@ -82,8 +82,12 @@ int libperm_rsa_modPow(u8 *msg, u32 msgBytes, u8 *strE, u32 strELen, u8 *strN, u
     u8 strrE[N_BYTE_SIZE*2];
     u8 msg_cpy[N_BYTE_SIZE];
     u8 sum[N2_BYTE_SIZE];
-    
     u32 e_bytes, N_bytes, sum_bytes;
+
+    while ((msgBytes > 0) && (msg[msgBytes-1] == 0)) {
+        msgBytes--;
+    }
+    if (msgBytes == 0) msgBytes = 1;
     
     strcpy(strrE, strE);
     strcpy(strrN, strN);
@@ -350,7 +354,7 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
     u32 t, f;
     u32 units = bbits / 16;
     u32 rem = bbits % 16;
-    u32 i, ai, bi;
+    int i, ai, bi;
 
     //printf("abits: %d, bbits+shift: %d\n", abits, bbits+shift);
     if (abits > bbits + shift) return 1;
@@ -366,7 +370,6 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
         t = bignumber_bitShiftGetBits(a, abits, ai, 16);
         //printf("#cmp t: %x\n", t);
         f = bignumber_bitShiftGetBits(b, bbits, bi, 16);
-        //printf("#cmp f: %x\n", f);
         if (t > f) {
             return 1;
         } else if (t < f) {
@@ -376,8 +379,8 @@ u32 bignumber_BitShiftCmp(u8 *a, u8 *b, u32 abits, u32 bbits, u32 shift) {
 
 
     if (rem) {
-        t = bignumber_bitShiftGetBits(a, abits, ai - rem, rem);
-        f = bignumber_bitShiftGetBits(b, abits, bi - rem, rem);
+        t = bignumber_bitShiftGetBits(a, abits, ai - rem + 1, rem);
+        f = bignumber_bitShiftGetBits(b, abits, bi - rem + 1, rem);
         //printf("rem t: %x\n", t);
         //printf("rem f: %x\n", f);
         if (t > f) {

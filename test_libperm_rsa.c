@@ -2,12 +2,12 @@
 #include <string.h>
 #include "libperm_rsa.h"
 
-#define STR_N       "95DA32B04A160337F88B11882EFBDB7A3B4633BC80E1FF19AA5064728992E80BF75ED11473D2E9DAE200C9DF3A283CB32D143C83880F65C02C432F850A79FBD1"
+#define STR_N       "596E33249DF3F94D0F97C2DE767572EB06A62D084D80F6334EA449505B9FC11C17D2EA2BA4BB7B712DEF1A91E031001530C9AA5F17ECDB9729BE992CFFD8CC55"
 #define STR_e       "10001"
-#define STR_d       "4E5A3FA4B3A81CD8B82926EA98FE717CD0DF5D0FD427D6B5B9BABD3AB23A50FF9B31999789AE0099CA48E20594D8538A61F1E41477348DEA28513474AA50CD4D"
+#define STR_d       "18D367AD259001C7EBA934766F2A0181CEF1B894927757613CD68C679B57C8D2808DCADC80E708958EAF2B2F82CA55B9979B6E0EAB2284CE2ADE9C45E5E2EC2D"
 
 int main(int argc, char *argv[]) {
-    char msg[] = {0x12, 0x34, 0x56, 0xaa, 0xbb, 0xcc};
+    char msg[] = {0x21,};
     char res[N_BYTE_SIZE];
     char strN[] = STR_N;
     char strE[] = STR_e;
@@ -18,14 +18,23 @@ int main(int argc, char *argv[]) {
     int strNLen = strlen(strN);
     int strELen = strlen(strE);
     int strDLen = strlen(strD);
+    u32 i;
 
-    res_size = libperm_rsa_modPow(msg, sizeof(msg), strE, strELen, strN, strNLen, res);
-    res_size = libperm_rsa_modPow(res, res_size, strD, strDLen, strN, strNLen, res);
+    for (i=0; i<0xffffff; i++) {
 
-    if (memcmp(msg, res, res_size) == 0) {
-        printf("#successed.\n");
-    } else {
-        printf("#failed.\n");
+        res_size = libperm_rsa_modPow((u8 *)&i, 4, strE, strELen, strN, strNLen, res);
+        dump_bytes(res, res_size);
+        res_size = libperm_rsa_modPow(res, res_size, strD, strDLen, strN, strNLen, res);
+
+
+        dump_bytes(res, res_size);
+
+        if (memcmp((void *)&i, res, res_size) == 0) {
+            printf("#successed.\n");
+        } else {
+            fprintf(stderr, "#failed, i: %d\n", i);
+            printf("#failed, i: %d\n", i);
+        }
     }
 
     return 0;
