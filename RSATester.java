@@ -15,8 +15,8 @@ public class RSATester {
         reader = new TestBufferedReader(new InputStreamReader(new FileInputStream(new File("test_out.txt"))));
         String line;
         while ((line = reader.readLine()) != null) {
-            if (line.equals("test modMul")) {
-                testModMul();
+            if (line.equals("test mul")) {
+                testMul();
             } else if (line.equals("test shiftSub")) {
                 testShiftSub();
             } else if (line.equals("test mode")) {
@@ -99,31 +99,29 @@ public class RSATester {
         } 
     }
 
-    private static void testModMul() throws Exception {
+    private static void testMul() throws Exception {
         int lino = sLine;
         String strA =  reader.readLine();
         String strB =  reader.readLine();
         String strN =  reader.readLine();
         String strAMulB = reader.readLine();
-        String strO =  reader.readLine();
         
         BigInteger a = new BigInteger(strA, 16);
         BigInteger b = new BigInteger(strB, 16);
         BigInteger N = new BigInteger(strN, 16);
         
         BigInteger aMulB = a.multiply(b);
-        BigInteger res = aMulB.mod(N);
-        String strRes = res.toString(16);
+        String strRes = aMulB.toString(16);
         
-        if (!strRes.equals(strO)) {
-            p("testModMul lino: " + lino);
+        if (!strRes.equals(strAMulB)) {
+            p("testMul lino: " + lino);
             p("a: " + strA);
             p("b: " + strB);
             p("N: " + strN);
-            p("aMulB: " + aMulB.toString(16));
-            p("aMulB: " + strAMulB);
+            //p("aMulB: " + aMulB.toString(16));
             p("res: " + strRes);
-            p("o: " + strO);
+            p("aMulB: " + strAMulB);
+            //p("o: " + strO);
         } 
     }
 

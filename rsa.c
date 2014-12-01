@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "libperm_rsa.h"
 
 //#define TEST 1
@@ -11,9 +12,9 @@
 #define ARRAY_SIZE(a)	(sizeof(a)/sizeof(a[0]))
 
 //a,b,N little endian big number, result in a return size
-u32 bignumber_modMul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out);
+u32 bignumber_mul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out);
 //a, little endian big number, b less then 0xffff, result in out, return size
-u32 bignumber_mul(u8 *a, u32 b, u32 la, u8 *out);
+u32 bignumber_mul16(u8 *a, u32 b, u32 la, u8 *out);
 //sum add ta after shit n, result in sum, ruturn size
 u32 bignumber_shiftAdd(u8 *sum, u8 *ta, u32 sum_size, u32 tsize, u32 n);
 
@@ -41,11 +42,11 @@ void string_reverse(u8 *string);
 #ifndef IS_LIB
 //#define STR_N       "26DD2D997696AA52EDDF7CA1C9979DF355179EAA98D76D736F3C7EC4C22E96BBDE029672EDA467544A1F1678E901A24A67FE4CE413BE7AAEA6328E397E7E15AF"
 //#define STR_N       "9628686253532F6A07852BE7744E20B1880737AA4FACB5B44E6EB91749CB64D99879724308C928449633238D5F245E10AC01A6D57D5513D7EC67EC726B41C3E7"
-#define STR_N       "955208D77AF313ADC650DE80A511F13B48227B40B7356880E2512AD612B7225CDF8C17FC3EBC833421FF70D469DCAD19A37A6964A08A7A752B3ED50DC353F36C6C63F5576DF1942B9364BD859A909A31FF2781C2643F6E6C17670B2BE4EF9224ED779C4F56BEADA5703D74628E9A989FE9E3C112125F66374DE2FBF089D8D38B"
+#define STR_N       "8A74CAAC646AD2224B24E87097D993B1A85DE97A79E3B0EAF1E3BC9624303A9FBB4FF21F00E56ACC103831E383841104C3FFC0FA2CB5D71FCFC0ECBEB0FE450FE867B0B075D22166C8BE35B1155A2534B9F410C3F78E30A8E54246CDB248EE14F130D783BE7D0808C4F56D1E31334CF38DFEA23EC52CFB7915C203FAEF077BA7"
 #define STR_e       "10001"
 //#define STR_d       "186D0EC9D334E29BF8916C1DAB3C35B3C8196E49BE82377243C97BCB625831B81DF64BA29B057A333359FB55736727B6EA9C50261B7B6AE44C319F3F134C1481"
 //#define STR_d       "25276A6CA9E17361F0EA6AAAA28492625B1E2E0FDE1705FECF496652F4D776E45F21356CDFAE8B9DBA6925D0762CBE3842B2B44CF814EA413BEEACCA60E9DE81"
-#define STR_d       "51CD4A38BA0B768969AE9DE67E07F14ED7BAC428F4F55655DD26384064AA5D31E1E9BEAE1AB46D705EFBB0953D957E6320530C6FEB1F51ECE48F1C6AD8CA21FD39369E5184DEC2E8DF24293794AB9341DCDBE7840709ADB07BE51395B050553E6BAA7CE9EAA253A81F964271E0064C0538B45E935DEA6AC1E6EF1D6EB5D98461"
+#define STR_d       "36BEB13872C80DE84360078C256E814878B311533D08BB765A485AD3DEE136FCDB7A63D8C068F5CE5407742A6A60F8BDB2A5D86ED2E8DF739398CBC3268693557B9AEE921D7D4B1F9B701C68AD1951F15E6901BE5800677182D47506DDE9F32FB77A72DCA9A26B3C12BA412079D9FD4255530CF60C9E8BE83853CF1B70A19F09"
 
 static u8 rsa_N[N_BYTE_SIZE];
 static u8 rsa_e[N_BYTE_SIZE];
@@ -106,9 +107,10 @@ int libperm_rsa_modPow(u8 *msg, u32 msgBytes, u8 *strE, u32 strELen, u8 *strN, u
 #ifndef IS_LIB
 
 int main(int argc, char *argv[]) {
-    //u8 msg[] = {0x18, 0x78, 0x31, 0x38, 0x91, 0x11, 0x3f, 0xee, 0x78, 0xcd, 0x96, 0xab, 0x98, 0x33};
-    //u8 msg[] = {0x99, 0xcc, 0x4d, 0x9c, 0x03, 0x11, 0x3e, 0x78, 0x77, 0x12, 0x13, 0x1a, 0x11};
-    u8 msg[] = {0xe};
+    u8 msg[] = {0x18, 0x78, 0x31, 0x38, 0x91, 0x11, 0x3f, 0xee, 0x78, 0xcd, 0x96, 0xab, 0x98, 0x33};
+    //u8 msg[] = {0xf};
+    //u8 msg[] = "1333038323031545292F0653832393761";
+    //string_reverse(msg);
     u8 enc[N_BYTE_SIZE];
     u8 enc_cpy[N_BYTE_SIZE];
     u32 enc_size, enc_size_cpy;
@@ -162,23 +164,20 @@ u32 rsa_decrypt(u8 *M, u32 Mbytes, u8 *out) {
 }
 #endif // IS_LIB
 
-u32 bignumber_modMul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out) {
+u32 bignumber_mul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *sum) {
 	u32 i;
 	u32 t;
-	u8 ta[N2_BYTE_SIZE + 16] = {0};
-	u8 sum[N2_BYTE_SIZE] = {0};
+	u8 ta[N_BYTE_SIZE*N_BYTE_SIZE + 16];
 	u32 tsize;
 	u32 sum_size = 0;
 
 #ifdef TEST
-    u8 a_cpy[N2_BYTE_SIZE];
-    u8 b_cpy[N2_BYTE_SIZE];
-    u8 N_cpy[N2_BYTE_SIZE];
-    u8 a_mul_b[N2_BYTE_SIZE];
+    u8 a_cpy[N_BYTE_SIZE*N_BYTE_SIZE+16];
+    u8 b_cpy[N_BYTE_SIZE*N_BYTE_SIZE+16];
+    u8 N_cpy[N_BYTE_SIZE*N_BYTE_SIZE+16];
     u32 la_cpy = la;
     u32 lb_cpy = lb;
     u32 lN_cpy = lN;
-    u32 a_mul_b_size;
 
     memcpy(a_cpy, a, la_cpy);
     memcpy(b_cpy, b, lb_cpy);
@@ -192,29 +191,29 @@ u32 bignumber_modMul(u8 *a, u8 *b, u8 *N, u32 la, u32 lb, u32 lN, u8 *out) {
 			t = (*(u32 *)(b+i)) & 0xffff;
 		}
 
-		tsize = bignumber_mul(a, t, la, ta);
-		sum_size = bignumber_shiftAdd(sum, ta, sum_size, tsize, i);
-
+		tsize = bignumber_mul16(a, t, la, ta);
+        if (i==0) {
+            memcpy(sum, ta, tsize);
+            sum_size = tsize;
+        } else {
+		    sum_size = bignumber_shiftAdd(sum, ta, sum_size, tsize, i);
+        }
 	}
 #ifdef TEST
-    memcpy(a_mul_b, sum, sum_size);
-    a_mul_b_size = sum_size;
-#endif
-    sum_size = bignumber_mod(sum, N, sum_size, lN);
-
-    memcpy(out, sum, sum_size);
-#ifdef TEST
-    printf("test modMul\n");
+    printf("test mul\n");
+    printf("#la_size: %d\n", la_cpy);
     printBytesAsHexString(a_cpy, la_cpy);
+    printf("#lb_size: %d\n", lb_cpy);
     printBytesAsHexString(b_cpy, lb_cpy);
+    printf("#lN_size: %d\n", lN_cpy);
     printBytesAsHexString(N_cpy, lN_cpy);
-    printBytesAsHexString(a_mul_b, a_mul_b_size);
-    printBytesAsHexString(out, sum_size);
+    printf("#sum_size: %d\n", sum_size);
+    printBytesAsHexString(sum, sum_size);
 #endif
 	return sum_size;
 }
 
-u32 bignumber_mul(u8 *a, u32 b, u32 la, u8 *out) {
+u32 bignumber_mul16(u8 *a, u32 b, u32 la, u8 *out) {
 	u32 i;
 	u32 t;
 	u32 carry = 0;
@@ -638,10 +637,13 @@ out:
 u32 bignumber_modPow(u8 *a, u8 *b, u8 *N, u32 abytes, u32 bbytes, u32 Nbytes, u8 *out) {
     u32 t;
     u32 bbits;
-    u8 ta[N2_BYTE_SIZE] = {1};
-    u8 sum[N2_BYTE_SIZE] = {1};
-    u32 ta_size, sum_size;
-    int i;
+    //u8 ta[N2_BYTE_SIZE] = {1};
+    //u8 sum[N2_BYTE_SIZE] = {1};
+    u8 *sum[2];
+    u8 *ta[2];
+    u32 ta_size[2]={0}, sum_size[2]={0};
+    u32 ret_size;
+    int i, j=0;
 
 #ifdef TEST
     u8 a_cpy[N2_BYTE_SIZE];
@@ -654,31 +656,69 @@ u32 bignumber_modPow(u8 *a, u8 *b, u8 *N, u32 abytes, u32 bbytes, u32 Nbytes, u8
     memcpy(b_cpy, b, bbytes);
     memcpy(N_cpy, N, Nbytes);
 #endif
-    
-    bbits = bignumber_getBitSize(b, bbytes);
-    memcpy(ta, a, abytes);
-    ta_size = abytes;
-    ta_size = bignumber_mod(ta, N, ta_size, Nbytes);
-    if (bignumber_bitShiftGetBits(b, bbits, 0, 1)) {
-        memcpy(sum, ta, ta_size);
-        sum_size = ta_size;
+
+    ta[0] = (u8 *)malloc(N_BYTE_SIZE * N_BYTE_SIZE);
+    ta[1] = (u8 *)malloc(N_BYTE_SIZE * N_BYTE_SIZE);
+    sum[0] = (u8 *)malloc(N_BYTE_SIZE * N_BYTE_SIZE);
+    sum[1] = (u8 *)malloc(N_BYTE_SIZE * N_BYTE_SIZE);
+
+    if (ta[0]==NULL || ta[1]==NULL || sum[0]==NULL || sum[1]==NULL) {
+        fprintf(stderr, "malloc failed.\n");
+        ret_size = 0;
+        goto out;
     }
 
-    for (i=1; i<bbits; i++) {
-        ta_size = bignumber_modMul(ta, ta, N, ta_size, ta_size, Nbytes, ta);
+    memset(ta[0], 0, N_BYTE_SIZE*N_BYTE_SIZE);
+    memset(ta[1], 0, N_BYTE_SIZE*N_BYTE_SIZE);
+    memset(sum[0], 0, N_BYTE_SIZE*N_BYTE_SIZE);
+    memset(sum[1], 0, N_BYTE_SIZE*N_BYTE_SIZE);
+
+    sum[0][0] = 1;
+    sum_size[0] = 1;
+    
+    bbits = bignumber_getBitSize(b, bbytes);
+    memcpy(ta[0], a, abytes);
+    ta_size[0] = abytes;
+    ta_size[0] = bignumber_mod(ta[0], N, ta_size[0], Nbytes);
+
+    if (bignumber_bitShiftGetBits(b, bbits, 0, 1)) {
+        memcpy(sum[0], ta[0], ta_size[0]);
+        sum_size[0] = ta_size[0];
+    }
+
+    for (i=1,j=1; i<bbits; i++) {
+        ta_size[i%2] = bignumber_mul(ta[(i-1)%2], ta[(i-1)%2], N, ta_size[(i-1)%2], ta_size[(i-1)%2], Nbytes, ta[i%2]);
+
+        if (ta_size[i%2] > N_BYTE_SIZE) {
+            ta_size[i%2] = bignumber_mod(ta[i%2], N, ta_size[i%2], Nbytes);
+        }
         if (bignumber_bitShiftGetBits(b, bbits, i, 1)) {
-            sum_size = bignumber_modMul(sum, ta, N, sum_size, ta_size, Nbytes, sum);
+            sum_size[j%2] = bignumber_mul(sum[(j-1)%2], ta[i%2], N, sum_size[(j-1)%2], ta_size[i%2], Nbytes, sum[j%2]);
+            if (sum_size[j%2] > N_BYTE_SIZE) {
+                sum_size[j%2] = bignumber_mod(sum[j%2], N, sum_size[j%2], Nbytes);
+            }
+            j++;
         }
     }
-    memcpy(out, sum, sum_size);
+
+    sum_size[(j-1)%2] = bignumber_mod(sum[(j-1)%2], N, sum_size[(j-1)%2], Nbytes);
+    memcpy(out, sum[(j-1)%2], sum_size[(j-1)%2]);
+    ret_size = sum_size[(j-1)%2];
+
 #ifdef TEST
     printf("test modPow\n");
     printBytesAsHexString(a_cpy, abytes_cpy);
     printBytesAsHexString(b_cpy, bbytes_cpy);
     printBytesAsHexString(N_cpy, Nbytes_cpy);
-    printBytesAsHexString(out, sum_size);
+    printBytesAsHexString(out, ret_size);
 #endif
-    return sum_size;
+
+out:
+    if (ta[0] != NULL) free(ta[0]);
+    if (ta[1] != NULL) free(ta[1]);
+    if (sum[0] != NULL) free(sum[0]);
+    if (sum[1] != NULL) free(sum[1]);
+    return ret_size;
 }
 
 void printBytesAsHexString(u8 *bytes, u32 size) {
@@ -773,7 +813,7 @@ void test_bignumber_mul(u8 *ia, u8 *ib, u8 *iN) {
     
     //dump_bytes(a, as);
     //dump_bytes(b, bs);
-    rs = bignumber_modMul(a, b, N, as, bs, Ns, res);
+    rs = bignumber_mul(a, b, N, as, bs, Ns, res);
     //dump_bytes(res, rs);
 
     bytes2string(res, rs, strres);
